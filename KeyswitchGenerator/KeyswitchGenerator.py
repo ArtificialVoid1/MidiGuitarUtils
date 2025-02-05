@@ -1,1 +1,2 @@
 import pyguitarpro
+import mido
