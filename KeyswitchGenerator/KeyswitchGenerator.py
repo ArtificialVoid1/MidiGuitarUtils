@@ -2,6 +2,7 @@ import guitarpro
 import mido
 
 from functools import partial
+import os
 
 import tkinter as tk
 from tkinter import filedialog
@@ -15,7 +16,34 @@ window.resizable(width=False, height=False)
 
 window.title('Keyswitch Generator')
 window.iconbitmap("KeyswitchGenerator\Icon.ico")
+#-------------------------------------------------------------
+#----------------------- PRESETS -----------------------------
+#-------------------------------------------------------------
 
+DefaultPresets = {
+    'default' : {
+        'string 8': (0, "X"),
+        'string 7': (0, "X"),
+        'string 6': (0, "X"),
+        'string 5': (0, "C0"),
+        'string 4': (0, "X"),
+        'string 3': (0, "X"),
+        'string 2': (0, "X"),
+        'string 1': (0, "X"),
+        'sustain': (0, "X"),
+        'palm mute': (0, "X"),
+        'dead note': (0, "X"),
+        'tap': (0, "X"),
+        'slap': (0, "X"),
+        'pop': (0, "X"),
+        'nat. harm.': (0, "X"),
+        'art. harm.': (0, "X")
+    }
+}
+
+
+
+#-------------------------------------------------------------
 #-------------------------------------------------------------
 
 midi_lookup = {
@@ -101,7 +129,6 @@ keyswitches = {
 }
 
 #-------------------------------------------------------------
-stack = []
 
 def openFilePicker():
     filepath = filedialog.askopenfilename()
@@ -124,6 +151,14 @@ def openFilePicker():
         gperror['text'] = 'File path does not exist!'
         ErrorFlags[2] = True
 
+def SavePresetButton():
+    filetypes = [('Keyswitch Preset', '.ks')]
+    filepath = filedialog.asksaveasfilename(defaultextension='.ks', filetypes=filetypes, title='Save As')
+    with open(filepath, 'w') as file:
+        for keyswitch in keyswitches:
+            file.write(keyswitch + ':' + str(keyswitches[keyswitch][0]) + ':' + keyswitches[keyswitch][1])
+            file.write('\n')
+
 #----------------------------------------------------------------------------------------
 
 def SetKeyswitchOption(keyswitch_id : str):
@@ -133,7 +168,6 @@ def SetKeyswitchOption(keyswitch_id : str):
         midiValue = midi_lookup[Notename]
         
         keyswitches[keyswitch_id] = (midiValue, Notename, keyswitches[keyswitch_id][2])
-        
         keyswitches[keyswitch_id][2].config(text=(Notename + ' :'))
         
         popup.destroy()
@@ -193,6 +227,47 @@ for index, keyswitch in enumerate(keyswitches):
     keyswitches[keyswitch] = (0, 'X', key_label)
 
 
+savepresetbtn = tk.Button(window, text='Save Preset', command=SavePresetButton)
+savepresetbtn.place(x=200, y=10)
+
+presets = ['Open preset']
+default_presets_folder = "C:/Users/%USERPROFILE%/Documents/VoidDsp/Keyswitch Presets/"
+
+
+
+if not os.path.exists(default_presets_folder):
+    os.makedirs(default_presets_folder)
+
+    for d_preset_name in DefaultPresets:
+        with open(default_presets_folder + d_preset_name + '.ks', 'w') as file:
+            for property in DefaultPresets[d_preset_name]:
+                file.write(property + ':' + str(DefaultPresets[d_preset_name][property][0]) + ':' + DefaultPresets[d_preset_name][property][1])
+                file.write('\n')
+
+
+
+def loadpreset(filepath):
+    with open(filepath, 'r') as file:
+        fileLines = file.read().split('\n')
+        for line in fileLines:
+            lineparts = line.split(':')
+            keyswitches[lineparts[0]] = (lineparts[1], lineparts[2], keyswitches[lineparts[0]][2])
+            if lineparts[2] == 'X':
+                keyswitches[lineparts[0]][2].config(text='None :')
+            else:
+                keyswitches[lineparts[0]][2].config(text=lineparts[2] + ' :')
+
+def openpreset(selected):
+    if selected == 'Open preset':
+        filepath = filedialog.askopenfilename(initialdir=default_presets_folder, defaultextension='.ks', filetypes=[('Preset File', '.ks')])
+        loadpreset(filepath)
+    else:
+        loadpreset(default_presets_folder + selected + '.ks')
+
+presetSelected = tk.StringVar()
+presetSelected.set('Select Preset')
+openPreset_dropdown = tk.OptionMenu(window, presetSelected, *presets, command=openpreset)
+openPreset_dropdown.place(x=300, y=10)
 
 
 createMidi = tk.Button(window, text='Generate', command=GenMidi)
