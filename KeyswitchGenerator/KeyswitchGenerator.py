@@ -251,7 +251,7 @@ def loadpreset(filepath):
         fileLines = file.read().split('\n')
         for line in fileLines:
             lineparts = line.split(':')
-            keyswitches[lineparts[0]] = (lineparts[1], lineparts[2], keyswitches[lineparts[0]][2])
+            keyswitches[lineparts[0]] = (int(lineparts[1], lineparts[2], keyswitches[lineparts[0]][2])
             if lineparts[2] == 'X':
                 keyswitches[lineparts[0]][2].config(text='None :')
             else:
