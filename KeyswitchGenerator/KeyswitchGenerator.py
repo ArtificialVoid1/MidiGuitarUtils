@@ -252,7 +252,7 @@ def GenMidi():
     
     for measure in track.measures:
         for voice in measure.voices:
-            for beat in voice.beats:
+            for i, beat in enumerate(voice.beats):
                 BeatTickLen = duration_to_ticks(beat.duration)
                 
                 if beat.status == guitarpro.BeatStatus.rest:
@@ -260,18 +260,53 @@ def GenMidi():
                 else:
                     for note in beat.notes: #note_on loop
                             
-                        if note.type == guitarpro.NoteType.normal:
+                        if note.type == guitarpro.NoteType.normal or note.type == guitarpro.NoteType.tie:
                             noteMidi = getMidiFromTab(note.value, note.string, Tune)
                             newtrack.append(m('note_on', note=noteMidi, velocity=note.velocity, time=BeatStartTime))
                             BeatStartTime = 0
                             
-                    BeatEndTime = BeatTickLen
-                    for note in beat.notes: #note_off loop
-                            
-                        if note.type == guitarpro.NoteType.normal:
+                            if keyswitches["Sustain"][1] != 'X':
+                                newtrack.append(m('note_on', note=keyswitches["Sustain"][0], velocity=95, time=BeatStartTime))
+                        
+                        elif note.type == guitarpro.NoteType.dead:
                             noteMidi = getMidiFromTab(note.value, note.string, Tune)
+                            newtrack.append(m('note_on', note=noteMidi, velocity=note.velocity, time=BeatStartTime))
+                            
+                            if keyswitches["Dead note"][1] != 'X':
+                                newtrack.append(m('note_on', note=keyswitches["Dead note"][0], velocity=95, time=BeatStartTime))
+                            BeatStartTime = 0
+                        
+                        
+                        if note.effect.staccato == True:
+                            newnote = beat.notes.pop(beat.notes.index(note))
+                            beat.notes.insert(newnote, 0)
+                        
+                    BeatEndTime = BeatTickLen
+                    
+                    
+                    
+                    
+                    for note in beat.notes: #note_off loop
+                        noteMidi = getMidiFromTab(note.value, note.string, Tune)
+                            
+                        if note.type == guitarpro.NoteType.normal or note.type == guitarpro.NoteType.tie:
+                            
+                            if note.effect.staccato == True:
+                                newtrack.append(m('note_off', note=noteMidi, velocity=note.velocity, time=int(BeatEndTime / 2.0)))
+                                BeatStartTime += int(BeatEndTime / 2.0)
+                            else:
+                                newtrack.append(m('note_off', note=noteMidi, velocity=note.velocity, time=BeatEndTime))
+                            BeatEndTime = 0
+                            
+                            if keyswitches["Sustain"][1] != 'X':
+                                newtrack.append(m('note_off', note=keyswitches["Sustain"][0], velocity=95, time=BeatEndTime))
+                        #---------------------------------------------------------------------------------------------------------
+                        elif note.type == guitarpro.NoteType.dead:
                             newtrack.append(m('note_off', note=noteMidi, velocity=note.velocity, time=BeatEndTime))
                             BeatEndTime = 0
+                            
+                            if keyswitches["Dead note"][1] != 'X':
+                                newtrack.append(m('note_off', note=keyswitches["Dead note"][0], velocity=95, time=BeatEndTime))
                         
     progresslabel.config(text='Midi Generated!')
             
