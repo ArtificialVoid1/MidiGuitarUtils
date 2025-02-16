@@ -10,6 +10,8 @@ import math
 import tkinter as tk
 from tkinter import filedialog, ttk
 
+import LookupTables
+
 #-------------------------------------------------------------
 
 window = tk.Tk()
@@ -18,30 +20,72 @@ window.geometry('550x400')
 window.resizable(width=False, height=False)
 
 window.title('Keyswitch Generator')
-window.iconbitmap("KeyswitchGenerator\Icon.ico")
+window.iconbitmap("KeyswitchGenerator/Icon.ico")
 #-------------------------------------------------------------
 #----------------------- PRESETS -----------------------------
 #-------------------------------------------------------------
 
 DefaultPresets = {
-    'Empty' : {
-        'String 8': (0, "X"),
-        'String 7': (0, "X"),
-        'String 6': (0, "X"),
-        'String 5': (0, "X"),
-        'String 4': (0, "X"),
-        'String 3': (0, "X"),
-        'String 2': (0, "X"),
-        'String 1': (0, "X"),
-        'sustain': (0, "X"),
-        'palm mute': (0, "X"),
-        'dead note': (0, "X"),
-        'tap': (0, "X"),
-        'slap': (0, "X"),
-        'pop': (0, "X"),
-        'nat. harm.': (0, "X"),
-        'art. harm.': (0, "X")
-    }
+'Empty':'''String 8:0:X
+String 7:0:X
+String 6:0:X
+String 5:0:X
+String 4:0:X
+String 3:0:X
+String 2:0:X
+String 1:0:X
+sustain:0:X
+palm mute:0:X
+dead note:0:X
+tap:0:X
+slap:0:X
+pop:0:X
+nat. harm.:0:X
+art. harm.:0:X
+Hammer-On:0:X
+Pull-Off:0:X''',
+
+'Eurobass 3':'''String 8:0:X
+String 7:0:X
+String 6:0:X
+String 5:103:G8
+String 4:102:F#8
+String 3:101:F8
+String 2:100:E8
+String 1:99:D#8
+Sustain:24:C2
+Palm mute:17:F1
+Dead note:27:D#2
+Tap:34:A#2
+Slap:28:E2
+Pop:30:F#2
+Nat. Harm.:32:G#2
+Art. Harm.:0:X
+Hammer-On:33:A2
+Pull-Off:33:A2
+''',
+
+'Ample TR6':'''String 8:0:X
+String 7:0:X
+String 6:0:X
+String 5:12:C1
+String 4:13:C#1
+String 3:14:D1
+String 2:15:D#1
+String 1:16:E1
+Sustain:24:C2
+Palm mute:26:D2
+Dead note:0:X
+Tap:32:G#2
+Slap:30:F#2
+Pop:31:G2
+Nat. Harm.:25:C#2
+Art. Harm.:0:X
+Hammer-On:0:X
+Pull-Off:0:X
+''',
+
+
 }
 
 
@@ -49,58 +93,6 @@ DefaultPresets = {
 #-------------------------------------------------------------
 #-------------------------------------------------------------
 
-midi_lookup = {
-    "C0": 0,
-    "C#0": 1,
-    "D0": 2,
-    "D#0": 3,
-    "E0": 4,
-    "F0": 5,
-    "F#0": 6,
-    "G0": 7,
-    "G#0": 8,
-    "A0": 9,
-    "A#0": 10,
-    "B0": 11,
-    "C1": 12,
-    "C#1": 13,
-    "D1": 14,
-    "D#1": 15,
-    "E1": 16,
-    "F1": 17,
-    "F#1": 18,
-    "G1": 19,
-    "G#1": 20,
-    "A1": 21,
-    "A#1": 22,
-    "B1": 23,
-    "C2": 24,
-    "C#2": 25,
-    "D2": 26,
-    "D#2": 27,
-    "E2": 28,
-    "F2": 29,
-    "F#2": 30,
-    "G2": 31,
-    "G#2": 32,
-    "A2": 33,
-    "A#2": 34,
-    "B2": 35,
-    "C3": 36,
-    "C#3": 37,
-    "D3": 38,
-    "D#3": 39,
-    "E3": 40,
-    "F3": 41,
-    "F#3": 42,
-    "G3": 43,
-    "G#3": 44,
-    "A3": 45,
-    "A#3": 46,
-    "B3": 47
-}
-
-Note_options = ["C0", "C#0", "D0", "D#0", "E0", "F0", "F#0", "G0", "G#0", "A0", "A#0", "B0", "C1", "C#1", "D1", "D#1", "E1", "F1", "F#1", "G1", "G#1", "A1", "A#1", "B1", "C2", "C#2", "D2", "D#2", "E2", "F2", "F#2", "G2", "G#2", "A2", "A#2", "B2", "C3", "C#3", "D3", "D#3", "E3", "F3", "F#3", "G3", "G#3", "A3", "A#3", "B3"]
 
 ErrorFlags = {
     1 : True,
@@ -113,8 +105,6 @@ usedData = {
     'UsedTrackNameGP' : '',
     'Transpose' : 0,
 }
-
-progressText = ''
 
 keyswitches = {
     'String 8' : (0, 'X', tk.Label()),
@@ -136,17 +126,9 @@ keyswitches = {
     
     'Nat. Harm.' : (0, 'X', tk.Label()),
     'Art. Harm.' : (0, 'X', tk.Label()),
-}
-
-keyswitchlookup = {
-    1 : 'String 1',
-    2 : 'String 2',
-    3 : 'String 3',
-    4 : 'String 4',
-    5 : 'String 5',
-    6 : 'String 6',
-    7 : 'String 7',
-    8 : 'String 8',
+    
+    'Hammer-On' : (0, 'X', tk.Label()),
+    'Pull-Off' : (0, 'X', tk.Label()),
 }
 
 
@@ -195,8 +177,8 @@ def SavePresetButton():
 def SetKeyswitchOption(keyswitch_id : str):
     
     def setNote():
-        Notename = clicked.get()
-        midiValue = midi_lookup[Notename]
+        Notename = dropdown.get()
+        midiValue = LookupTables.midi_lookup[Notename]
         
         keyswitches[keyswitch_id] = (midiValue, Notename, keyswitches[keyswitch_id][2])
         keyswitches[keyswitch_id][2].config(text=(Notename + ' :'))
@@ -211,10 +193,7 @@ def SetKeyswitchOption(keyswitch_id : str):
     label = tk.Label(popup, text='Enter Note:')
     label.pack(pady=5)
     
-    clicked = tk.StringVar()
-    clicked.set("C0")
-    
-    dropdown = tk.OptionMenu(popup, clicked, *Note_options)
+    dropdown = ttk.Combobox(popup, values=LookupTables.midi_keys, width=5, state="readonly")
     dropdown.pack(pady=5)
     
     button = tk.Button(popup, text="Cancel", command=popup.destroy)
@@ -293,6 +272,7 @@ def GenMidi():
                 BeatTickLen = duration_to_ticks(beat.duration)
                 tiesInNextBeat = []
                 NoEffect = True
+                String = 0
                 
                 try:
                     nextbeat = voice.beats[b_i + 1]
@@ -311,6 +291,7 @@ def GenMidi():
                     BeatStartTime += BeatTickLen
                 else:
                     for note in beat.notes: #note_on loop
+                        String = note.string
                             
                         if note.type == guitarpro.NoteType.normal:
                             noteMidi = getMidiFromTab(note.value, note.string, Tune)
@@ -348,6 +329,9 @@ def GenMidi():
                     
                     if keyswitches["Sustain"][1] != 'X' and NoEffect:
                                 newtrack.append(m('note_on', note=keyswitches["Sustain"][0], velocity=95, time=BeatStartTime))
+                    
+                    if len(beat.notes) == 1:
+                        newtrack.append(m('note_on', note=keyswitches[LookupTables.strings[String]][0], velocity=95, time=BeatStartTime))
                     
                     BeatEndTime = BeatTickLen
                     NoEffect = True
@@ -395,7 +379,10 @@ def GenMidi():
                                     newtrack.append(m('note_off', note=keyswitches["Dead note"][0], velocity=95, time=BeatEndTime))
                                     NoEffect = False
                     if keyswitches["Sustain"][1] != 'X' and NoEffect:
-                        newtrack.append(m('note_off', note=keyswitches["Sustain"][0], velocity=95, time=BeatEndTime))                
+                        newtrack.append(m('note_off', note=keyswitches["Sustain"][0], velocity=95, time=BeatEndTime))
+                    
+                    if len(beat.notes) == 1:
+                        newtrack.append(m('note_off', note=keyswitches[LookupTables.strings[String]][0], velocity=95, time=BeatEndTime))             
                 lastbeatlen = BeatTickLen
                 
     progresslabel.config(text='Midi Generated!')
@@ -463,9 +450,7 @@ if not os.path.exists(default_presets_folder):
 
     for d_preset_name in DefaultPresets:
         with open(default_presets_folder + d_preset_name + '.ks', 'w') as file:
-            for property in DefaultPresets[d_preset_name]:
-                file.write(property + ':' + str(DefaultPresets[d_preset_name][property][0]) + ':' + DefaultPresets[d_preset_name][property][1])
-                file.write('\n')
+            file.write(DefaultPresets[d_preset_name])
 
 
 
