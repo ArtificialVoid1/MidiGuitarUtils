@@ -5,6 +5,7 @@ from mido import Message as m
 
 from functools import partial
 import os
+import math
 
 import tkinter as tk
 from tkinter import filedialog, ttk
@@ -13,7 +14,7 @@ from tkinter import filedialog, ttk
 
 window = tk.Tk()
 
-window.geometry('550x700')
+window.geometry('550x400')
 window.resizable(width=False, height=False)
 
 window.title('Keyswitch Generator')
@@ -23,15 +24,15 @@ window.iconbitmap("KeyswitchGenerator\Icon.ico")
 #-------------------------------------------------------------
 
 DefaultPresets = {
-    'default' : {
-        'string 8': (0, "X"),
-        'string 7': (0, "X"),
-        'string 6': (0, "X"),
-        'string 5': (0, "C0"),
-        'string 4': (0, "X"),
-        'string 3': (0, "X"),
-        'string 2': (0, "X"),
-        'string 1': (0, "X"),
+    'Empty' : {
+        'String 8': (0, "X"),
+        'String 7': (0, "X"),
+        'String 6': (0, "X"),
+        'String 5': (0, "X"),
+        'String 4': (0, "X"),
+        'String 3': (0, "X"),
+        'String 2': (0, "X"),
+        'String 1': (0, "X"),
         'sustain': (0, "X"),
         'palm mute': (0, "X"),
         'dead note': (0, "X"),
@@ -110,20 +111,21 @@ usedData = {
     'UsedPathGP' : '',
     'UsedTrackGP' : 0,
     'UsedTrackNameGP' : '',
+    'Transpose' : 0,
 }
 
 progressText = ''
 
 keyswitches = {
-    'String 8 (F#)' : (0, 'X', tk.Label()),
-    'String 7 (B)' : (0, 'X', tk.Label()),
+    'String 8' : (0, 'X', tk.Label()),
+    'String 7' : (0, 'X', tk.Label()),
     
-    'String 6 (E)' : (0, 'X', tk.Label()),
-    'String 5 (A)' : (0, 'X', tk.Label()),
-    'String 4 (D)' : (0, 'X', tk.Label()),
-    'String 3 (G)' : (0, 'X', tk.Label()),
-    'String 2 (b)' : (0, 'X', tk.Label()),
-    'String 1 (e)' : (0, 'X', tk.Label()),
+    'String 6' : (0, 'X', tk.Label()),
+    'String 5' : (0, 'X', tk.Label()),
+    'String 4' : (0, 'X', tk.Label()),
+    'String 3' : (0, 'X', tk.Label()),
+    'String 2' : (0, 'X', tk.Label()),
+    'String 1' : (0, 'X', tk.Label()),
     
     'Sustain' : (0, 'X', tk.Label()),
     'Palm mute' : (0, 'X', tk.Label()),
@@ -136,6 +138,19 @@ keyswitches = {
     'Art. Harm.' : (0, 'X', tk.Label()),
 }
 
+keyswitchlookup = {
+    1 : 'String 1',
+    2 : 'String 2',
+    3 : 'String 3',
+    4 : 'String 4',
+    5 : 'String 5',
+    6 : 'String 6',
+    7 : 'String 7',
+    8 : 'String 8',
+}
+
+
+
 #-------------------------------------------------------------
 
 def openFilePicker():
@@ -145,7 +160,7 @@ def openFilePicker():
         
         filename = filepath.split('/')[-1]
         
-        if filename.endswith('.gp5'):
+        if filename.endswith('.gp5') or filename.endswith('.gp4'):
             gpfile_picker['text'] = filename
             gperror['text'] = ''
             usedData["UsedPathGP"] = filepath
@@ -211,8 +226,18 @@ def SetKeyswitchOption(keyswitch_id : str):
 
 #-------------------------------------------------------------
 
+def estimate(ticks):
+    if ticks % 10 >= 5:
+        return math.ceil(ticks)
+    else:
+        return math.floor(ticks)
+
+
 def getMidiFromTab(value : int, string : int, tuning : list[int] = [64, 59, 55, 50, 45, 40, 35, 30]) -> int:
-    return tuning[string - 1] + value
+    try:
+        return tuning[string - 1] + value + int(Transpose.get())
+    except ValueError:
+        return tuning[string - 1] + value
 
 def duration_to_ticks(duration):
     """Converts a Duration object to MIDI ticks."""
@@ -221,7 +246,7 @@ def duration_to_ticks(duration):
         ticks *= 1.5
     if duration.tuplet:
         ticks *= duration.tuplet.times / duration.tuplet.enters
-    return int(ticks)
+    return estimate(ticks)
 
 def GenMidi():
     for ErrorFlag in ErrorFlags:
@@ -246,68 +271,133 @@ def GenMidi():
     currentTimeSig = (4, 4)
     track = Gpfile.tracks[usedData["UsedTrackGP"]]
     Tune = []
-            
+    
+    nextbeat = None
+    nextMeasure = None
+    isAtEnd = False
+    lastbeatlen = 0
+    
     for string in track.strings:
         Tune.append(string.value)
     
-    for measure in track.measures:
+    for m_i, measure in enumerate(track.measures):
+        
+        try:
+            nextMeasure = track.measures[m_i + 1]
+        except IndexError:
+            isAtEnd = True
         for voice in measure.voices:
-            for i, beat in enumerate(voice.beats):
+            for b_i, beat in enumerate(voice.beats):
+                if beat.status == guitarpro.BeatStatus.empty:
+                    continue
                 BeatTickLen = duration_to_ticks(beat.duration)
+                tiesInNextBeat = []
+                NoEffect = True
                 
-                if beat.status == guitarpro.BeatStatus.rest:
+                try:
+                    nextbeat = voice.beats[b_i + 1]
+                    for note in nextbeat.notes:
+                        if note.type == guitarpro.NoteType.tie:
+                            tiesInNextBeat.append(note)
+                except IndexError:
+                    if isAtEnd == False and nextMeasure != None:
+                        for v in nextMeasure.voices:
+                            for b in v.beats:
+                                for note in b.notes:
+                                    if note.type == guitarpro.NoteType.tie:
+                                        tiesInNextBeat.append(note)
+                
+                if beat.status == guitarpro.BeatStatus.rest or beat.notes == []:
                     BeatStartTime += BeatTickLen
                 else:
                     for note in beat.notes: #note_on loop
                             
-                        if note.type == guitarpro.NoteType.normal or note.type == guitarpro.NoteType.tie:
+                        if note.type == guitarpro.NoteType.normal:
                             noteMidi = getMidiFromTab(note.value, note.string, Tune)
                             newtrack.append(m('note_on', note=noteMidi, velocity=note.velocity, time=BeatStartTime))
                             BeatStartTime = 0
                             
-                            if keyswitches["Sustain"][1] != 'X':
-                                newtrack.append(m('note_on', note=keyswitches["Sustain"][0], velocity=95, time=BeatStartTime))
+                            if note.effect.palmMute == True and keyswitches['Palm mute'][1] != 'X' and NoEffect:
+                                newtrack.append(m('note_on', note=keyswitches['Palm mute'][0], velocity=95, time=BeatStartTime))
+                                NoEffect = False
+                                
+                                
+                            elif beat.effect.slapEffect.value == 1:
+                                newtrack.append(m('note_on', note=keyswitches['Tap'][0], velocity=95, time=BeatStartTime))
+                                NoEffect = False
+                            elif beat.effect.slapEffect.value == 2:
+                                newtrack.append(m('note_on', note=keyswitches['Slap'][0], velocity=95, time=BeatStartTime))
+                                NoEffect = False
+                            elif beat.effect.slapEffect.value == 3:
+                                newtrack.append(m('note_on', note=keyswitches['Pop'][0], velocity=95, time=BeatStartTime))
+                                NoEffect = False
                         
                         elif note.type == guitarpro.NoteType.dead:
                             noteMidi = getMidiFromTab(note.value, note.string, Tune)
                             newtrack.append(m('note_on', note=noteMidi, velocity=note.velocity, time=BeatStartTime))
                             
-                            if keyswitches["Dead note"][1] != 'X':
+                            if keyswitches["Dead note"][1] != 'X' and NoEffect:
                                 newtrack.append(m('note_on', note=keyswitches["Dead note"][0], velocity=95, time=BeatStartTime))
+                                NoEffect = False
                             BeatStartTime = 0
                         
                         
                         if note.effect.staccato == True:
                             newnote = beat.notes.pop(beat.notes.index(note))
                             beat.notes.insert(newnote, 0)
-                        
+                    
+                    if keyswitches["Sustain"][1] != 'X' and NoEffect:
+                                newtrack.append(m('note_on', note=keyswitches["Sustain"][0], velocity=95, time=BeatStartTime))
+                    
                     BeatEndTime = BeatTickLen
-                    
-                    
+                    NoEffect = True
                     
                     
                     for note in beat.notes: #note_off loop
                         noteMidi = getMidiFromTab(note.value, note.string, Tune)
-                            
-                        if note.type == guitarpro.NoteType.normal or note.type == guitarpro.NoteType.tie:
-                            
-                            if note.effect.staccato == True:
-                                newtrack.append(m('note_off', note=noteMidi, velocity=note.velocity, time=int(BeatEndTime / 2.0)))
-                                BeatStartTime += int(BeatEndTime / 2.0)
-                            else:
-                                newtrack.append(m('note_off', note=noteMidi, velocity=note.velocity, time=BeatEndTime))
-                            BeatEndTime = 0
-                            
-                            if keyswitches["Sustain"][1] != 'X':
-                                newtrack.append(m('note_off', note=keyswitches["Sustain"][0], velocity=95, time=BeatEndTime))
-                        #---------------------------------------------------------------------------------------------------------
-                        elif note.type == guitarpro.NoteType.dead:
-                            newtrack.append(m('note_off', note=noteMidi, velocity=note.velocity, time=BeatEndTime))
-                            BeatEndTime = 0
-                            
-                            if keyswitches["Dead note"][1] != 'X':
-                                newtrack.append(m('note_off', note=keyswitches["Dead note"][0], velocity=95, time=BeatEndTime))
+                        ignoreNote = False
                         
+                        if not isAtEnd:
+                            for tiedNote in tiesInNextBeat:
+
+                                if tiedNote.string == note.string:
+                                    ignoreNote = True
+                        
+                        
+                            if note.type == guitarpro.NoteType.normal or note.type == guitarpro.NoteType.tie:
+                                if note.effect.staccato == True:
+                                    newtrack.append(m('note_off', note=noteMidi, velocity=note.velocity, time=estimate(BeatEndTime / 2.0)))
+                                    BeatStartTime += int(BeatEndTime / 2.0)
+                                else:
+                                    newtrack.append(m('note_off', note=noteMidi, velocity=note.velocity, time=BeatEndTime))
+                                BeatEndTime = 0
+                                
+                                if note.effect.palmMute == True and keyswitches['Palm mute'][1] != 'X' and NoEffect:
+                                    newtrack.append(m('note_off', note=keyswitches['Palm mute'][0], velocity=95, time=BeatEndTime))
+                                    NoEffect = False
+                                    
+                                    
+                                elif beat.effect.slapEffect.value == 1:
+                                    newtrack.append(m('note_off', note=keyswitches['Tap'][0], velocity=95, time=BeatEndTime))
+                                    NoEffect = False
+                                elif beat.effect.slapEffect.value == 2:
+                                    newtrack.append(m('note_off', note=keyswitches['Slap'][0], velocity=95, time=BeatEndTime))
+                                    NoEffect = False
+                                elif beat.effect.slapEffect.value == 3:
+                                    newtrack.append(m('note_off', note=keyswitches['Pop'][0], velocity=95, time=BeatEndTime))
+                                    NoEffect = False
+                            #---------------------------------------------------------------------------------------------------------
+                            elif note.type == guitarpro.NoteType.dead:
+                                newtrack.append(m('note_off', note=noteMidi, velocity=note.velocity, time=BeatEndTime))
+                                BeatEndTime = 0
+                                
+                                if keyswitches["Dead note"][1] != 'X' and NoEffect:
+                                    newtrack.append(m('note_off', note=keyswitches["Dead note"][0], velocity=95, time=BeatEndTime))
+                                    NoEffect = False
+                    if keyswitches["Sustain"][1] != 'X' and NoEffect:
+                        newtrack.append(m('note_off', note=keyswitches["Sustain"][0], velocity=95, time=BeatEndTime))                
+                lastbeatlen = BeatTickLen
+                
     progresslabel.config(text='Midi Generated!')
             
     newfilepath = filedialog.asksaveasfilename(defaultextension='.mid', filetypes=[('Midi File', '.mid')])
@@ -340,17 +430,23 @@ def selectTrack(_):
         
 tracks = ['---']
 
-selectTrack_dropdown = ttk.Combobox(window, values=tracks, width=20)
+selectTrack_dropdown = ttk.Combobox(window, values=tracks, width=20, state="readonly")
 selectTrack_dropdown.bind("<<ComboboxSelected>>", selectTrack)
 selectTrack_dropdown.place(x=100, y=120)
 
+xLevel = 300
+minusIndicies = 0
 for index, keyswitch in enumerate(keyswitches):
     
+    if index == keyswitches.__len__() / 2:
+        xLevel += 150
+        minusIndicies = index
+    
     keyswitch_btn = tk.Button(window, text=keyswitch, command=partial(SetKeyswitchOption, keyswitch))
-    keyswitch_btn.place(x=300, y=48 + (30 * (index + 1)))
+    keyswitch_btn.place(x=xLevel, y=48 + (30 * ((index - minusIndicies) + 1)))
     
     key_label = tk.Label(window, text='None :')
-    key_label.place(x=250, y=50 + (30 * (index + 1)))
+    key_label.place(x=xLevel - 50, y=50 + (30 * ((index - minusIndicies) + 1)))
     keyswitches[keyswitch] = (0, 'X', key_label)
 
 
@@ -358,18 +454,18 @@ savepresetbtn = tk.Button(window, text='Save Preset', command=SavePresetButton)
 savepresetbtn.place(x=200, y=10)
 
 presets = ['Open preset']
-default_presets_folder = "C:/Users/%USERPROFILE%/Documents/VoidDsp/Keyswitch Presets/"
+default_presets_folder = "Presets/"
 
 
 
-'''if not os.path.exists(default_presets_folder):
+if not os.path.exists(default_presets_folder):
     os.makedirs(default_presets_folder)
 
     for d_preset_name in DefaultPresets:
         with open(default_presets_folder + d_preset_name + '.ks', 'w') as file:
             for property in DefaultPresets[d_preset_name]:
                 file.write(property + ':' + str(DefaultPresets[d_preset_name][property][0]) + ':' + DefaultPresets[d_preset_name][property][1])
-                file.write('\n')'''
+                file.write('\n')
 
 
 
@@ -384,18 +480,37 @@ def loadpreset(filepath):
             else:
                 keyswitches[lineparts[0]][2].config(text=lineparts[2] + ' :')
 
-def openpreset(selected):
-    if selected == 'Open preset':
+
+
+def openPreset(_):
+    selected = preset_dropdown.get()
+    
+    if selected == 'Import Preset':
         filepath = filedialog.askopenfilename(defaultextension='.ks', filetypes=[('Preset File', '.ks')]) #initialdir=default_presets_folder
-        loadpreset(filepath)
+        loadpreset(filepath=filepath)
     else:
-        loadpreset(selected + '.ks') # default_presets_folder + 
+        filepath = default_presets_folder + selected + '.ks'
+        loadpreset(filepath=filepath)
 
-presetSelected = tk.StringVar()
-presetSelected.set('Select Preset')
-openPreset_dropdown = tk.OptionMenu(window, presetSelected, *presets, command=openpreset)
-openPreset_dropdown.place(x=300, y=10)
+preset_options = ['Import Preset']
 
+for filename in os.listdir(default_presets_folder):
+    preset_options.append(filename.removesuffix('.ks'))
+
+preset_dropdown = ttk.Combobox(window, values=preset_options, width=10, state="readonly")
+preset_dropdown.bind("<<ComboboxSelected>>", openPreset)
+preset_dropdown.place(x=300, y=7)
+
+def validateNumber(char):
+    return char.isdigit()
+validation = window.register(validateNumber)
+
+Transpose = tk.StringVar()
+
+TransposeBox = tk.Entry(window, validate='all', validatecommand=(validation, '%S'), textvariable=Transpose, width=10)
+TransposeBox.place(x=40, y=200)
+TransposeText = tk.Label(text='Tanspose:')
+TransposeText.place(x=40, y=175)
 
 createMidi = tk.Button(window, text='Generate Midi', command=GenMidi)
 createMidi.place(x=450, y=10)
