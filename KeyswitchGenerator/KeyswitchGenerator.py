@@ -85,7 +85,25 @@ Hammer-On:0:X
 Pull-Off:0:X
 ''',
 
-
+'AMH':'''String 8:4:E0
+String 7:5:F0
+String 6:6:F#0
+String 5:7:G0
+String 4:8:G#0
+String 3:9:A0
+String 2:10:A#0
+String 1:11:B0
+Sustain:12:C1
+Palm mute:14:D1
+Dead note:0:X
+Tap:18:F#1
+Slap:0:X
+Pop:0:X
+Nat. Harm.:13:C#1
+Art. Harm.:0:X
+Hammer-On:0:X
+Pull-Off:0:X
+''',
 }
 
 
@@ -187,6 +205,7 @@ def SetKeyswitchOption(keyswitch_id : str):
         
     
     popup = tk.Toplevel(window)
+    popup.iconbitmap("KeyswitchGenerator/Icon.ico")
     popup.title(keyswitch_id)
     popup.geometry('200x200')
     
@@ -290,8 +309,12 @@ def GenMidi():
                 if beat.status == guitarpro.BeatStatus.rest or beat.notes == []:
                     BeatStartTime += BeatTickLen
                 else:
+                    elapsed = 0
                     for note in beat.notes: #note_on loop
                         String = note.string
+                        if note.effect.harmonic == None:
+                            note.effect.harmonic = guitarpro.HarmonicEffect()
+                            note.effect.harmonic.type = 0
                             
                         if note.type == guitarpro.NoteType.normal:
                             noteMidi = getMidiFromTab(note.value, note.string, Tune)
@@ -312,6 +335,31 @@ def GenMidi():
                             elif beat.effect.slapEffect.value == 3:
                                 newtrack.append(m('note_on', note=keyswitches['Pop'][0], velocity=95, time=BeatStartTime))
                                 NoEffect = False
+                            
+                            elif note.effect.harmonic.type == 1:
+                                newtrack.append(m('note_on', note=keyswitches['Nat. Harm.'][0], velocity=95, time=BeatStartTime))
+                                NoEffect = False
+                            elif note.effect.harmonic.type == 2 or note.effect.harmonic.type == 3 or note.effect.harmonic.type == 4 or note.effect.harmonic.type == 5:
+                                newtrack.append(m('note_on', note=keyswitches['Art. Harm.'][0], velocity=95, time=BeatStartTime))
+                                NoEffect = False
+                            
+                            if note.effect.bend != None and note.effect.bend.type != None:
+                                total_time_of_beat = BeatTickLen
+                                lastpointTime = 0
+                                for ijk,point in enumerate(note.effect.bend.points):
+                                    pointTimeInBeat = math.floor(point.position * (total_time_of_beat / note.effect.bend.maxPosition))
+                                    if ijk != 0:
+                                        elapsed += (pointTimeInBeat - lastpointTime)
+                                    newtrack.append(m('pitchwheel', channel=0, pitch=int(point.value * 341), time=0))
+                                    lastpointTime = pointTimeInBeat
+                                remainingTime = total_time_of_beat - elapsed
+                                #if remainingTime > 0:
+                                    #newtrack.append(m('pitchwheel', channel=0, pitch=0, time=0))
+                                    #elapsed += remainingTime
+                                #elif remainingTime < 0:
+                                    #raise ValueError("Bend effect time exceeds beat length")
+                            else:
+                                newtrack.append(m('pitchwheel', channel=0, pitch=0, time=0))
                         
                         elif note.type == guitarpro.NoteType.dead:
                             noteMidi = getMidiFromTab(note.value, note.string, Tune)
@@ -325,15 +373,14 @@ def GenMidi():
                         
                         if note.effect.staccato == True:
                             newnote = beat.notes.pop(beat.notes.index(note))
-                            beat.notes.insert(newnote, 0)
+                            beat.notes.insert(0, newnote)
                     
                     if keyswitches["Sustain"][1] != 'X' and NoEffect:
                                 newtrack.append(m('note_on', note=keyswitches["Sustain"][0], velocity=95, time=BeatStartTime))
                     
                     if len(beat.notes) == 1:
                         newtrack.append(m('note_on', note=keyswitches[LookupTables.strings[String]][0], velocity=95, time=BeatStartTime))
-                    
-                    BeatEndTime = BeatTickLen
+                    BeatEndTime = BeatTickLen - elapsed
                     NoEffect = True
                     
                     
@@ -369,6 +416,13 @@ def GenMidi():
                                     NoEffect = False
                                 elif beat.effect.slapEffect.value == 3:
                                     newtrack.append(m('note_off', note=keyswitches['Pop'][0], velocity=95, time=BeatEndTime))
+                                    NoEffect = False
+                                
+                                elif note.effect.harmonic.type == 1:
+                                    newtrack.append(m('note_off', note=keyswitches['Nat. Harm.'][0], velocity=95, time=BeatEndTime))
+                                    NoEffect = False
+                                elif note.effect.harmonic.type == 2 or note.effect.harmonic.type == 3 or note.effect.harmonic.type == 4 or note.effect.harmonic.type == 5:
+                                    newtrack.append(m('note_off', note=keyswitches['Art. Harm.'][0], velocity=95, time=BeatEndTime))
                                     NoEffect = False
                             #---------------------------------------------------------------------------------------------------------
                             elif note.type == guitarpro.NoteType.dead:
